@@ -1,0 +1,17 @@
+[package]
+name = "migration_checker"
+version = "0.1.0"
+edition = "2021"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+quiche = "0.18.0"
+url = "1"
+ring = "0.16"
+log = { version = "0.4", features = ["std"] }
+mio = { version = "0.8", features = ["net", "os-poll"] }
+env_logger = "0.6"
+slab = "0.4"
+crossbeam-channel = "0.5.1"
+docopt = "1"

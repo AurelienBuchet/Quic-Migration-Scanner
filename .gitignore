@@ -1,0 +1,8 @@
+// Ignore binaries
+/target
+
+// Ignore Cargo.lock
+Cargo.lock
+
+// Ignore outputs
+*.json
