@@ -67,7 +67,7 @@ fn main() {
                 format!(",\n{}", test_quic_migration)
             };
             out_file.write(res.as_bytes()).expect("Failed to write line");
-            debug!("Test result : {:?}", test_quic_migration);
+            debug!("Test result error : {:?}", test_quic_migration.error);
             i+=1;
         }
     });

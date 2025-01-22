@@ -190,6 +190,7 @@ impl QuicheClient{
             return Ok(());
         }
 
+
         self.primary_socket.connect(self.peer_addr).expect("Failed to connect socket");
         self.migration_socket.connect(self.peer_addr).expect("Failed to connect socket");
 
@@ -769,6 +770,13 @@ impl QuicheClient{
                     break;
                 },
             }
+        }
+    }
+
+    pub fn get_stats(&self) -> Option<quiche::Stats>{
+        match self.quiche_conn.as_ref(){
+            Some(conn) => Some(conn.stats()),
+            None => None
         }
     }
 }

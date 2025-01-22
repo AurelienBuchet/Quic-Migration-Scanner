@@ -2,7 +2,10 @@
 use std::collections::HashMap;
 use std::fmt;
 use std::net::IpAddr;
+use std::time::Duration;
 use std::{net::SocketAddr, str::FromStr};
+
+use quiche::Stats;
 
 #[derive(Debug)]
 pub struct Target{
@@ -67,7 +70,6 @@ impl fmt::Display for MigrationType{
     }
 }
 
-#[derive(Debug)]
 pub struct TestResult{
     pub url: String,
     pub peer_addr: Option<SocketAddr>,
@@ -78,6 +80,8 @@ pub struct TestResult{
     pub migration_status: Option<MigrationStatus>,
     pub error: Option<TestError>,
     pub response_headers: Option<HashMap<String,String>>,
+    pub duration: Option<Duration>,
+    pub stats: Option<Stats>,
 }
 
 impl TestResult {
@@ -91,7 +95,9 @@ impl TestResult {
             server: None,
             migration_status: None,
             error: None,
-            response_headers: None
+            response_headers: None,
+            duration: None,
+            stats: None,
         }
     }
 }
@@ -122,6 +128,11 @@ pub fn prepare_hdr(url: &str) -> Option<Vec<quiche::h3::Header>>{
         ]);
 }
 
+
+fn format_stats(stats: &Stats) -> String{
+    format!("{{\"lost\":{}}},{{\"sent_bytes\":{}}},{{\"recv_bytes\":{}}},{{\"paths\":{}}},{{\"migration_disabled\":{}}}", stats.lost, stats.sent_bytes, stats.recv_bytes, stats.paths_count, stats.peer_disable_active_migration)
+}
+
 impl fmt::Display for TestResult {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result{
         let server = match &self.server {
@@ -145,14 +156,22 @@ impl fmt::Display for TestResult {
             },
             None => format!("")
         };
+        let duration = match &self.duration{
+            Some(val) => format!(",\"duration\":\"{}\"", val.as_secs()*1000 + val.subsec_millis() as u64),
+            None => format!("")
+        };
+        let stats = match &self.stats{
+            Some(val) => format!(",\"conn_stats\":\"{}\"", format_stats(val)),
+            None => format!("")
+        };
         match &self.error {
             Some(err) => {
                 match err {
                     TestError::ResolutionError => write!(f,"{{\"url\":\"{}\",\"error\":\"{:?}\"}}", self.url, err),
-                    _ => write!(f,"{{\"url\":\"{}\",\"test_type\":\"{}\",\"error\":\"{:?}\",\"performed_handshake\":{},\"performed_migration\":{}{}{}{}{}}}", self.url, self.migration_type, err, self.handshake_done, self.migrated,peer_addr, migration_status, server, headers)
+                    _ => write!(f,"{{\"url\":\"{}\",\"test_type\":\"{}\",\"error\":\"{:?}\",\"performed_handshake\":{},\"performed_migration\":{}{}{}{}{}{}{}}}", self.url, self.migration_type, err, self.handshake_done, self.migrated,peer_addr, migration_status, server, headers, duration, stats)
                 }
             },
-            None => write!(f,"{{\"url\":\"{}\",\"test_type\":\"{}\",\"performed_handshake\":{},\"performed_migration\":{}{}{}{}{}}}", self.url, self.migration_type, self.handshake_done, self.migrated, peer_addr, migration_status, server, headers)
+            None => write!(f,"{{\"url\":\"{}\",\"test_type\":\"{}\",\"performed_handshake\":{},\"performed_migration\":{}{}{}{}{}{}{}}}", self.url, self.migration_type, self.handshake_done, self.migrated, peer_addr, migration_status, server, headers, duration, stats)
         }
     }
 }
