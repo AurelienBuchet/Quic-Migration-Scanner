@@ -130,7 +130,7 @@ pub fn prepare_hdr(url: &str) -> Option<Vec<quiche::h3::Header>>{
 
 
 fn format_stats(stats: &Stats) -> String{
-    format!("{{\"lost\":{}}},{{\"sent_bytes\":{}}},{{\"recv_bytes\":{}}},{{\"paths\":{}}},{{\"migration_disabled\":{}}}", stats.lost, stats.sent_bytes, stats.recv_bytes, stats.paths_count, stats.peer_disable_active_migration)
+    format!("{{\"lost\":{},\"sent_bytes\":{},\"recv_bytes\":{},\"paths\":{},\"migration_disabled\":{}}}", stats.lost, stats.sent_bytes, stats.recv_bytes, stats.paths_count, stats.peer_disable_active_migration)
 }
 
 impl fmt::Display for TestResult {
