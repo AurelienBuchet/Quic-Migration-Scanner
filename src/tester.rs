@@ -5,7 +5,7 @@ use crate::common::{MigrationStatus, MigrationType, Target, TestResult};
 use crate::quiche_client::*;
 
 
-pub fn test_migration(target: &Target, primary_ip: Option<IpAddr>, migration_ip: Option<IpAddr>, wait_headers: bool, migration_type: MigrationType, fast: bool) -> TestResult{
+pub fn test_migration(target: &Target, primary_ip: Option<IpAddr>, migration_ip: Option<IpAddr>, wait_headers: bool, migration_type: Option<MigrationType>, fast: bool) -> TestResult{
     let mut result: TestResult = TestResult::from_target(target);
 
     let mut client = match QuicheClient::init(target, primary_ip, migration_ip){
@@ -28,8 +28,8 @@ pub fn test_migration(target: &Target, primary_ip: Option<IpAddr>, migration_ip:
     result.peer_addr = Some(client.peer_addr);
     result.handshake_done = true;
 
-    if !wait_headers{
-        let status = match client.probe_path_and_migrate(migration_type){
+    if !wait_headers && migration_type.is_some(){
+        let status = match client.probe_path_and_migrate(migration_type.unwrap()){
             Ok(status) => status,
             Err(e) => {
                 result.duration = Some(start_time.elapsed());
@@ -42,7 +42,7 @@ pub fn test_migration(target: &Target, primary_ip: Option<IpAddr>, migration_ip:
         }
     }
 
-    let response_headers = match client.perform_request_with_redirect(None, &mut None, 5, wait_headers, Some(migration_type), !fast){
+    let response_headers = match client.perform_request_with_redirect(None, &mut None, 5, wait_headers, migration_type, !fast){
         Ok(hdrs) => hdrs,
         Err(e) => {
             result.duration = Some(start_time.elapsed());

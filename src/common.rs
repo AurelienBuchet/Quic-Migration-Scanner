@@ -47,7 +47,7 @@ pub enum MigrationStatus{
 pub enum MigrationType{
     Standard,
     Passive,
-    ReusedCID
+    ReusedCID,
 }
 
 impl fmt::Display for MigrationStatus{
@@ -161,7 +161,7 @@ impl fmt::Display for TestResult {
             None => format!("")
         };
         let stats = match &self.stats{
-            Some(val) => format!(",\"conn_stats\":\"{}\"", format_stats(val)),
+            Some(val) => format!(",\"conn_stats\":{}", format_stats(val)),
             None => format!("")
         };
         match &self.error {

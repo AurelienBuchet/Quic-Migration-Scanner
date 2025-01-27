@@ -11,7 +11,7 @@ pub struct Args {
     pub n_threads: usize,
     pub out_file: String,
     pub wait_headers: bool,
-    pub migration_type: MigrationType,
+    pub migration_type: Option<MigrationType>,
     pub migration_ip: Option<IpAddr>,
     pub primary_ip: Option<IpAddr>,
     pub fast: bool,
@@ -54,10 +54,11 @@ impl Parseable for Args {
         };
         let wait_headers = args.get_bool("--wait-headers");
         let migration_type = match args.get_str("--type") {
-            "" => MigrationType::Standard,
-            "standard" => MigrationType::Standard,
-            "passive" => MigrationType::Passive,
-            "reuseCID" => MigrationType::ReusedCID,
+            "" => Some(MigrationType::Standard),
+            "standard" => Some(MigrationType::Standard),
+            "passive" => Some(MigrationType::Passive),
+            "reuseCID" => Some(MigrationType::ReusedCID),
+            "none" => None,
             _ => panic!("Unknown migration type. migrations supported: standard, passive, reuseCID")
         };
         let fast = args.get_bool("--fast");
