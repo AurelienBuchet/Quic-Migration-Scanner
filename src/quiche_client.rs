@@ -261,7 +261,18 @@ impl QuicheClient{
     }
 
     pub fn perform_request(&mut self, custom_headers: &Option<Vec<Header>>, file: &mut Option<File>, migrate: bool, migration_type: Option<MigrationType>, full_request: bool) -> Result<Option<HashMap<String, String>>, TestError>{
-        if self.h3_conn.is_none(){
+
+        if self.quiche_conn.as_mut().unwrap().is_closed() {
+            self.quiche_conn = None;
+            self.timeout = false;
+            info!("Connection is closed, reconnecting");
+            match self.connect() {
+                Ok(()) => info!("Reconnected"),
+                Err(e) => return Err(e)
+            }
+            self.h3_conn = None;
+        }
+        if self.h3_conn.is_none() {
             self.h3_conn = Some(
                 quiche::h3::Connection::with_transport(&mut self.quiche_conn.as_mut().unwrap(), &quiche::h3::Config::new().unwrap()).expect("Failed to create HTTP connection")
             );
