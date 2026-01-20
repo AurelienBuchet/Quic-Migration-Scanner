@@ -36,6 +36,7 @@ pub struct QuicheClient{
     migration_socket: UdpSocket,
     timeout: bool,
     end_now: bool,
+    redirect: bool,
     
     config: Config,
     request_headers: Vec<Header>,
@@ -173,6 +174,7 @@ impl QuicheClient{
             h3_conn: None,
             keylog,
             timeout: false,
+            redirect: false,
             app_proto_selected: false,
             new_path_probed: false,
             path_validated: false,
@@ -280,7 +282,7 @@ impl QuicheClient{
             }
         };
         debug!("sent request id: {}", stream_id);
-        while !self.quiche_conn.as_mut().unwrap().is_closed() && !self.quiche_conn.as_mut().unwrap().stream_finished(stream_id) && !self.end_now{
+        while !self.quiche_conn.as_mut().unwrap().is_closed() && !self.quiche_conn.as_mut().unwrap().stream_finished(stream_id) && !self.end_now && !self.redirect{
             match self.flush_output(self.force_socket){
                 Err(e) => return Err(e),
                 _ => ()
@@ -308,6 +310,7 @@ impl QuicheClient{
                                 return Ok(Some(map));
                             }
                             debug!("Following redirection. New headers: {:?}", new_headers);
+                            self.redirect = false;
                         },
                         None => return Ok(None)
                     }
@@ -648,31 +651,29 @@ impl QuicheClient{
             Some(val) => val,
             None => panic!("Unknown status") 
         };
-        if status == "200"{
+        if status.starts_with("2"){
             return None;
         }
 
         match response_hdrs.get("location") {
             Some(url) => {
-                let mut new_url = self.url.to_string();
-                if new_url.ends_with("/") && url.starts_with("/") {
-                    new_url.pop();
-                } else if !new_url.ends_with("/") && !url.starts_with("/") {
-                    new_url.push('/');
+                let mut new_url;
+                if url.starts_with("/") {
+                    new_url = self.url.to_string();
+                    if new_url.ends_with("/") {
+                        new_url.pop();
+                    }
+                    new_url.push_str(url);
+                } else  {
+                    new_url = url.to_string();
                 }
-                new_url.push_str(url);
+                self.url = Url::parse(&new_url).expect("Failed to parse redirect URL");
                 return prepare_hdr(&new_url)
             },
             None => ()
         };
 
-        match response_hdrs.get("Location") {
-            Some(url) => return prepare_hdr(url),
-            None => ()
-        };
-
         debug!("Failed to redirect request : {:?}", response_hdrs);
-
         None
     }
     
@@ -693,6 +694,16 @@ impl QuicheClient{
                             (name, value)
                         })
                         .collect();
+
+                    if header_map.get("location").is_some(){
+                        debug!("Redirection detected");
+                        self.redirect = true;
+                        self.response_headers = Some(header_map);
+                        break;
+                    }
+
+                    self.response_headers = Some(header_map);
+
                     if migrate{
                         match self.probe_path_and_migrate(migration_type.unwrap()){
                             Ok(status) => {
@@ -703,7 +714,6 @@ impl QuicheClient{
                             }
                         };
                     }
-                    self.response_headers = Some(header_map);
                     if !full_request{
                         info!("Done reading headers");
                         self.end_now = true;

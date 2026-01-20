@@ -22,9 +22,9 @@ There are also several options that can be used:
 - -o --output FILE:             Write the results to the specified file (default: out.json)
 - -w --wait-headers:            Wait until response headers are received before performing the migration
 - -f --fast                     Shutdown the connection as soon as the response headers are received without waiting for the whole response
-- --threads N                  Use N threads to perform the scans (default: 100)
+- --threads N                   Use N threads to perform the scans (default: 100)
 - -m --migration-addr ADDRESS   Use the specified source address for the migration
-- -i --interface ADDRESS        Use the specified interface for the migration
+- -a --address ADDRESS          Use the provide address as primary address.
 - t --type TYPE                 Use the specified type of migration. Supported types are: 
     - standard (default): Perform a standard migration, using negotiated CID and path challenge
     - reuseCID: Perform a migration re-using the same CID and sending a path challenge

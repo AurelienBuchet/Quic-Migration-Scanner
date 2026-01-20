@@ -26,7 +26,7 @@ Options:
   -o --output FILE              Write the result to the given file [default: out.json].
   -w --wait-headers             Wait response header before migration.
   -m --migration-addr ADDRESS   Perform connection migration on the given address.
-  -i --interface ADDRESS        Use the provide interface as primary address.
+  -a --address ADDRESS          Use the provide address as primary address.
   -h --help                     Show this screen.
   -t --type TYPE                Change the type of migration checked [default: standard].
   -f --fast                     Shutdown the connection once headers are received.
@@ -48,7 +48,7 @@ impl Parseable for Args {
             "" => None,
             val => Some(IpAddr::from_str(val).expect("Failed to parse IP"))
         };
-        let primary_ip = match args.get_str("--interface") {
+        let primary_ip = match args.get_str("--address") {
             "" => None,
             val => Some(IpAddr::from_str(val).expect("Failed to parse IP"))
         };

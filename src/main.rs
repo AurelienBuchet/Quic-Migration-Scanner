@@ -81,7 +81,11 @@ fn main() {
             None => break
         };
         let line = line.expect("Failed to read file");
-        send_url.send(create_target(&line)).unwrap();
+        let target = match create_target(&line) {
+            Some(val) => val,
+            None => continue
+        };
+        send_url.send(target).unwrap();
     }
 
     info!("Done parsing");
@@ -99,15 +103,18 @@ fn main() {
     write_handle.join().unwrap();
 }
 
-fn create_target(line: &str) -> Target{
+fn create_target(line: &str) -> Option<Target>{
     let parts = line.split(",").collect::<Vec<&str>>();
     let ip:IpAddr = match parts[0].parse() {
         Ok(val) => val,
-        Err(_) => panic!("Failed to parse IP")
+        Err(e) => {
+            error!("Error parsing IP from line {}: {:?}", line, e);
+            return None;
+        }
     };
     let domain = create_url(parts[1].trim(), parts[0].trim());
 
-    Target::new(ip, domain)
+    Some(Target::new(ip, domain))
 }
 
 fn create_url(domain: &str, ip: &str) -> String{
