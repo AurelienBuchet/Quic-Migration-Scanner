@@ -123,7 +123,12 @@ impl QuicheClient{
                     b":path",
                     url[url::Position::BeforePath..].as_bytes(),
                 ),
-                quiche::h3::Header::new(b"user-agent", b"quiche"),
+                //quiche::h3::Header::new(b"user-agent", b"quiche"),
+                quiche::h3::Header::new(b"user-agent", b"Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/141.0.0.0 Safari/537.36"),
+                quiche::h3::Header::new(b"accept", b"text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7"),
+                quiche::h3::Header::new(b"accept-encoding", b"gzip, deflate, br"),
+                quiche::h3::Header::new(b"priority", b"u=0, i"),
+
             ];
 
         let mut config = quiche::Config::new(u32::from_str_radix("1", 16).unwrap()).unwrap();
@@ -256,7 +261,18 @@ impl QuicheClient{
     }
 
     pub fn perform_request(&mut self, custom_headers: &Option<Vec<Header>>, file: &mut Option<File>, migrate: bool, migration_type: Option<MigrationType>, full_request: bool) -> Result<Option<HashMap<String, String>>, TestError>{
-        if self.h3_conn.is_none(){
+
+        if self.quiche_conn.as_mut().unwrap().is_closed() {
+            self.quiche_conn = None;
+            self.timeout = false;
+            info!("Connection is closed, reconnecting");
+            match self.connect() {
+                Ok(()) => info!("Reconnected"),
+                Err(e) => return Err(e)
+            }
+            self.h3_conn = None;
+        }
+        if self.h3_conn.is_none() {
             self.h3_conn = Some(
                 quiche::h3::Connection::with_transport(&mut self.quiche_conn.as_mut().unwrap(), &quiche::h3::Config::new().unwrap()).expect("Failed to create HTTP connection")
             );
@@ -657,7 +673,16 @@ impl QuicheClient{
 
         match response_hdrs.get("location") {
             Some(url) => {
+
                 let mut new_url;
+                if url.starts_with("http://") || url.starts_with("https://") {
+                    return prepare_hdr(&url)
+                }
+                else if url.starts_with("://") {
+                    new_url = format!("{}{}", self.url.scheme(), &url);
+                    return prepare_hdr(&new_url);
+                }
+
                 if url.starts_with("/") {
                     new_url = self.url.to_string();
                     if new_url.ends_with("/") {
