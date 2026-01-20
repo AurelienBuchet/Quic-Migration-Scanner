@@ -123,7 +123,12 @@ impl QuicheClient{
                     b":path",
                     url[url::Position::BeforePath..].as_bytes(),
                 ),
-                quiche::h3::Header::new(b"user-agent", b"quiche"),
+                //quiche::h3::Header::new(b"user-agent", b"quiche"),
+                quiche::h3::Header::new(b"user-agent", b"Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/141.0.0.0 Safari/537.36"),
+                quiche::h3::Header::new(b"accept", b"text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7"),
+                quiche::h3::Header::new(b"accept-encoding", b"gzip, deflate, br"),
+                quiche::h3::Header::new(b"priority", b"u=0, i"),
+
             ];
 
         let mut config = quiche::Config::new(u32::from_str_radix("1", 16).unwrap()).unwrap();

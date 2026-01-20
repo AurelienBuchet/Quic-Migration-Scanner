@@ -47,7 +47,7 @@ fn main() {
         let mut i: i32 = 0;
         let mut first = true;
         loop {
-            if i % 5000 == 0{
+            if i % 1000 == 0{
                 info!("probed {i} domains");
             }
             let test_quic_migration = match recv_result.recv(){
