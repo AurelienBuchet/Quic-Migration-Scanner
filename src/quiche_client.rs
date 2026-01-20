@@ -18,6 +18,7 @@ use quiche::h3::NameValue;
 use quiche::h3::Header;
 use quiche::Config;
 use ring::rand::*;
+use url::ParseError;
 use url::Url;
 
 
@@ -321,7 +322,10 @@ impl QuicheClient{
                 Ok(hdrs) => {
                     match hdrs{
                         Some(map) => {
-                            new_headers = self.update_hdrs(&map);
+                            new_headers = match self.update_hdrs(&map){
+                                Ok(val) => val,
+                                Err(e) => return Err(e)
+                            };
                             if new_headers.is_none(){
                                 return Ok(Some(map));
                             }
@@ -661,14 +665,14 @@ impl QuicheClient{
         return Ok(())
     }
 
-    fn update_hdrs(&mut self, response_hdrs: &HashMap<String,String>)-> Option<Vec<Header>>{
+    fn update_hdrs(&mut self, response_hdrs: &HashMap<String,String>)-> Result<Option<Vec<Header>>, TestError>{
         debug!("{:?}", response_hdrs);
         let status = match response_hdrs.get(":status") {
             Some(val) => val,
             None => panic!("Unknown status") 
         };
         if status.starts_with("2"){
-            return None;
+            return Ok(None);
         }
 
         match response_hdrs.get("location") {
@@ -692,14 +696,34 @@ impl QuicheClient{
                 } else  {
                     new_url = url.to_string();
                 }
-                self.url = Url::parse(&new_url).expect("Failed to parse redirect URL");
-                return prepare_hdr(&new_url)
+                self.url = match Url::parse(&new_url){
+                    Ok(val) => val,
+                    Err(e) => {
+                        if e == ParseError::RelativeUrlWithoutBase{
+                            let mut base = self.url.to_string();
+                            base.push('/');
+                            base.push_str(&new_url);
+                            match Url::parse(&base){
+                                Ok(val) => val,
+                                Err(e) => {
+                                    error!("Failed to parse redirect url {:?} reason : {:?}", &new_url, e);
+                                    return Err(TestError::ResolutionError);
+                                }
+                            }
+                        } else {
+                            error!("Failed to parse redirect url {:?} reason : {:?}", &new_url, e);
+                            return Err(TestError::ResolutionError);
+                        }
+                        
+                    }
+                };
+                return Ok(prepare_hdr(&new_url))
             },
             None => ()
         };
 
         debug!("Failed to redirect request : {:?}", response_hdrs);
-        None
+        Err(TestError::HTTPError)
     }
     
     fn handle_responses(&mut self,  file: &mut Option<File>, migrate: bool, migration_type: Option<MigrationType>, full_request: bool) {
