@@ -680,11 +680,11 @@ impl QuicheClient{
 
                 let mut new_url;
                 if url.starts_with("http://") || url.starts_with("https://") {
-                    return prepare_hdr(&url)
+                    return Ok(prepare_hdr(&url))
                 }
                 else if url.starts_with("://") {
                     new_url = format!("{}{}", self.url.scheme(), &url);
-                    return prepare_hdr(&new_url);
+                    return Ok(prepare_hdr(&new_url));
                 }
 
                 if url.starts_with("/") {
