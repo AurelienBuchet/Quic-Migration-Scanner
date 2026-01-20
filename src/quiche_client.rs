@@ -673,7 +673,16 @@ impl QuicheClient{
 
         match response_hdrs.get("location") {
             Some(url) => {
+
                 let mut new_url;
+                if url.starts_with("http://") || url.starts_with("https://") {
+                    return prepare_hdr(&url)
+                }
+                else if url.starts_with("://") {
+                    new_url = format!("{}{}", self.url.scheme(), &url);
+                    return prepare_hdr(&new_url);
+                }
+
                 if url.starts_with("/") {
                     new_url = self.url.to_string();
                     if new_url.ends_with("/") {
