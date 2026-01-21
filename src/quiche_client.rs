@@ -673,7 +673,7 @@ impl QuicheClient{
         match response_hdrs.get("location") {
             Some(url) => {
 
-                let new_url;
+                let mut new_url;
                 if url.starts_with("http://") || url.starts_with("https://") {
                     self.url = match Url::parse(&url) {
                         Ok(val) => val,
@@ -724,13 +724,13 @@ impl QuicheClient{
                                     val
                                 },
                                 Err(e) => {
-                                    error!("Failed to parse redirect url {:?} reason : {:?}", &new_url, e);
-                                    return Err(TestError::ResolutionError);
+                                    error!("Failed to parse redirect url after update {:?} reason : {:?}", &new_url, e);
+                                    return Err(TestError::HTTPError);
                                 }
                             }
                         } else {
                             error!("Failed to parse redirect url {:?} reason : {:?}", &new_url, e);
-                            return Err(TestError::ResolutionError);
+                            return Err(TestError::HTTPError);
                         }
                         
                     }
