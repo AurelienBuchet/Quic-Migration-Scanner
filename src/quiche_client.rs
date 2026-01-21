@@ -675,12 +675,24 @@ impl QuicheClient{
 
                 let new_url;
                 if url.starts_with("http://") || url.starts_with("https://") {
-                    self.url = Url::parse(&url).expect(format!("Failed to parse absolute redirect URL {}", url).as_str());
+                    self.url = match Url::parse(&url) {
+                        Ok(val) => val,
+                        Err(e) => {
+                            error!("Failed to parse absolute redirect URL {} reason: {:?}", url, e);
+                            return Err(TestError::HTTPError);
+                        }
+                    };
                     return Ok(prepare_hdr(&url))
                 }
                 else if url.starts_with("://") {
                     new_url = format!("{}{}", self.url.scheme(), &url);
-                    self.url = Url::parse(&new_url).expect(format!("Failed to parse scheme-relative redirect URL {}", url).as_str());
+                    self.url = match Url::parse(&new_url) {
+                        Ok(val) => val,
+                        Err(e) => {
+                            error!("Failed to parse scheme-relative redirect URL {} reason: {:?}", url, e);
+                            return Err(TestError::HTTPError);
+                        }
+                    };
                     return Ok(prepare_hdr(&new_url));
                 }
 
