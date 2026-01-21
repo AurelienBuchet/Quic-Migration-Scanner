@@ -673,23 +673,31 @@ impl QuicheClient{
         match response_hdrs.get("location") {
             Some(url) => {
 
-                let mut new_url;
+                let new_url;
                 if url.starts_with("http://") || url.starts_with("https://") {
+                    self.url = Url::parse(&url).expect(format!("Failed to parse absolute redirect URL {}", url).as_str());
                     return Ok(prepare_hdr(&url))
                 }
                 else if url.starts_with("://") {
                     new_url = format!("{}{}", self.url.scheme(), &url);
+                    self.url = Url::parse(&new_url).expect(format!("Failed to parse scheme-relative redirect URL {}", url).as_str());
                     return Ok(prepare_hdr(&new_url));
                 }
 
+                //At this point, URL start with either a domain.tld/something or /something or just something
                 if url.starts_with("/") {
-                    new_url = self.url.to_string();
-                    if new_url.ends_with("/") {
-                        new_url.pop();
-                    }
-                    new_url.push_str(url);
-                } else  {
-                    new_url = url.to_string();
+                    // For absolute paths, use only base (scheme + authority) without the path
+                    let base = &self.url[..url::Position::BeforePath];
+                    new_url = format!("{}{}", base, url);
+                } else  { //Url does not start with /
+                    let base = &self.url[..url::Position::BeforePath];
+                    let path = self.url.path();
+                    let folder = if let Some(pos) = path.rfind('/') {
+                        &path[..=pos]
+                    } else {
+                        "/"
+                    };
+                    new_url = format!("{}{}{}", base, folder, url);
                 }
                 self.url = match Url::parse(&new_url){
                     Ok(val) => val,
@@ -845,4 +853,262 @@ fn generate_cid_and_reset_token<T: SecureRandom>(
     rng.fill(&mut reset_token).unwrap();
     let reset_token = u128::from_be_bytes(reset_token);
     (scid, reset_token)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::net::{IpAddr, Ipv4Addr};
+
+    struct TestCase {
+        name: &'static str,
+        initial_url: &'static str,
+        status: &'static str,
+        location: Option<&'static str>,
+        expected_result: TestExpectation,
+    }
+
+    enum TestExpectation {
+        None,
+        Redirect {
+            expected_url: &'static str,
+            expected_authority: &'static str,
+            expected_path: &'static str,
+        },
+    }
+
+    fn create_test_client(initial_url: &str) -> QuicheClient {
+        let target = Target {
+            domain: initial_url.to_string(),
+            ip: IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1)),
+            port: 443,
+        };
+
+        QuicheClient::init(&target, None, None).unwrap()
+    }
+
+    fn get_header_value(headers: &Option<Vec<Header>>, name: &[u8]) -> String {
+        if let Some(hdrs) = headers {
+            for hdr in hdrs {
+                if hdr.name() == name {
+                    return String::from_utf8_lossy(hdr.value()).to_string();
+                }
+            }
+        }
+        String::new()
+    }
+
+    macro_rules! test_update_hdrs_case {
+        ($test_name:ident, $name:expr, $initial_url:expr, $status:expr, $location:expr, $expected:expr) => {
+            #[test]
+            fn $test_name() {
+                let mut client = create_test_client($initial_url);
+                let mut response_hdrs = HashMap::new();
+                response_hdrs.insert(":status".to_string(), $status.to_string());
+
+                if let Some(location) = $location {
+                    response_hdrs.insert("location".to_string(), location.to_string());
+                }
+
+                let result = client.update_hdrs(&response_hdrs);
+
+                match $expected {
+                    TestExpectation::None => {
+                        assert!(result.is_ok(), "Test '{}' failed: expected Ok(None), got error: {:?}", $name, result);
+                        let result = result.unwrap();
+                        assert!(result.is_none(), "Test '{}' failed: expected None, got Some", $name);
+                    }
+                    TestExpectation::Redirect { expected_url, expected_authority, expected_path } => {
+                        assert!(result.is_ok(), "Test '{}' failed: expected Ok, got error: {:?}", $name, result);
+                        let result = result.unwrap();
+                        assert!(result.is_some(), "Test '{}' failed: expected Some, got None", $name);
+
+                        let authority = get_header_value(&result, b":authority");
+                        let path = get_header_value(&result, b":path");
+
+                        assert_eq!(authority, expected_authority,
+                            "Test '{}' failed: authority mismatch", $name);
+                        assert_eq!(path, expected_path,
+                            "Test '{}' failed: path mismatch", $name);
+                        assert_eq!(client.url.as_str(), expected_url,
+                            "Test '{}' failed: URL mismatch", $name);
+                    }
+                }
+            }
+        };
+    }
+
+    test_update_hdrs_case!(
+        test_status_200_returns_none,
+        "Status 200 returns None",
+        "https://example.com/page",
+        "200",
+        None::<&str>,
+        TestExpectation::None
+    );
+
+    test_update_hdrs_case!(
+        test_status_201_returns_none,
+        "Status 201 returns None",
+        "https://example.com/page",
+        "201",
+        None::<&str>,
+        TestExpectation::None
+    );
+
+    test_update_hdrs_case!(
+        test_absolute_http_url,
+        "Absolute HTTP URL",
+        "https://example.com/old",
+        "301",
+        Some("http://redirect.com/new"),
+        TestExpectation::Redirect {
+            expected_url: "http://redirect.com/new",
+            expected_authority: "redirect.com",
+            expected_path: "/new",
+        }
+    );
+
+    test_update_hdrs_case!(
+        test_absolute_https_url,
+        "Absolute HTTPS URL",
+        "https://example.com/old",
+        "302",
+        Some("https://secure.com/secure"),
+        TestExpectation::Redirect {
+            expected_url: "https://secure.com/secure",
+            expected_authority: "secure.com",
+            expected_path: "/secure",
+        }
+    );
+
+    test_update_hdrs_case!(
+        test_scheme_relative_url,
+        "Scheme-relative URL",
+        "https://example.com/old",
+        "301",
+        Some("://redirect.com/new"),
+        TestExpectation::Redirect {
+            expected_url: "https://redirect.com/new",
+            expected_authority: "redirect.com",
+            expected_path: "/new",
+        }
+    );
+
+    test_update_hdrs_case!(
+        test_absolute_path,
+        "Absolute path",
+        "https://example.com/old/page",
+        "301",
+        Some("/new/location"),
+        TestExpectation::Redirect {
+            expected_url: "https://example.com/new/location",
+            expected_authority: "example.com",
+            expected_path: "/new/location",
+        }
+    );
+
+    test_update_hdrs_case!(
+        test_absolute_path_with_trailing_slash,
+        "Absolute path with trailing slash in base",
+        "https://example.com/old/",
+        "301",
+        Some("/new"),
+        TestExpectation::Redirect {
+            expected_url: "https://example.com/new",
+            expected_authority: "example.com",
+            expected_path: "/new",
+        }
+    );
+
+    test_update_hdrs_case!(
+        test_relative_path_with_folder,
+        "Relative path with folder",
+        "https://example.com/folder/page",
+        "301",
+        Some("other.html"),
+        TestExpectation::Redirect {
+            expected_url: "https://example.com/folder/other.html",
+            expected_authority: "example.com",
+            expected_path: "/folder/other.html",
+        }
+    );
+
+    test_update_hdrs_case!(
+        test_relative_path_without_folder,
+        "Relative path without folder",
+        "https://example.com/page",
+        "301",
+        Some("other.html"),
+        TestExpectation::Redirect {
+            expected_url: "https://example.com/other.html",
+            expected_authority: "example.com",
+            expected_path: "/other.html",
+        }
+    );
+
+    test_update_hdrs_case!(
+        test_relative_path_with_subfolders,
+        "Relative path with subfolders",
+        "https://example.com/a/b/c/page",
+        "301",
+        Some("file.html"),
+        TestExpectation::Redirect {
+            expected_url: "https://example.com/a/b/c/file.html",
+            expected_authority: "example.com",
+            expected_path: "/a/b/c/file.html",
+        }
+    );
+
+    test_update_hdrs_case!(
+        test_absolute_path_with_query_string,
+        "Absolute path with query string",
+        "https://example.com/page?param=value",
+        "301",
+        Some("/new?other=param"),
+        TestExpectation::Redirect {
+            expected_url: "https://example.com/new?other=param",
+            expected_authority: "example.com",
+            expected_path: "/new?other=param",
+        }
+    );
+
+    test_update_hdrs_case!(
+        test_relative_path_with_query_string,
+        "Relative path with query string",
+        "https://example.com/folder/page",
+        "301",
+        Some("other.html?key=value"),
+        TestExpectation::Redirect {
+            expected_url: "https://example.com/folder/other.html?key=value",
+            expected_authority: "example.com",
+            expected_path: "/folder/other.html?key=value",
+        }
+    );
+
+    test_update_hdrs_case!(
+        test_with_custom_port,
+        "With custom port",
+        "https://example.com:8443/page",
+        "301",
+        Some("/new"),
+        TestExpectation::Redirect {
+            expected_url: "https://example.com:8443/new",
+            expected_authority: "example.com:8443",
+            expected_path: "/new",
+        }
+    );
+
+    test_update_hdrs_case!(
+        test_with_fragment,
+        "With fragment",
+        "https://example.com/page",
+        "301",
+        Some("/new#section"),
+        TestExpectation::Redirect {
+            expected_url: "https://example.com/new#section",
+            expected_authority: "example.com",
+            expected_path: "/new#section",
+        }
+    );
 }
