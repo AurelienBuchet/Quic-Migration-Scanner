@@ -704,7 +704,10 @@ impl QuicheClient{
                             base.push('/');
                             base.push_str(&new_url);
                             match Url::parse(&base){
-                                Ok(val) => val,
+                                Ok(val) => {
+                                    new_url = base;
+                                    val
+                                },
                                 Err(e) => {
                                     error!("Failed to parse redirect url {:?} reason : {:?}", &new_url, e);
                                     return Err(TestError::ResolutionError);
