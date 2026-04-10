@@ -15,6 +15,7 @@ pub struct Args {
     pub migration_ip: Option<IpAddr>,
     pub primary_ip: Option<IpAddr>,
     pub fast: bool,
+    pub no_progress: bool,
 }
 
 pub const USAGE: &str = "Usage:
@@ -30,6 +31,7 @@ Options:
   -h --help                     Show this screen.
   -t --type TYPE                Change the type of migration checked [default: standard].
   -f --fast                     Shutdown the connection once headers are received.
+  --no-progress                 Disable the progress bar.
 ";
 
 impl Parseable for Args {
@@ -62,6 +64,7 @@ impl Parseable for Args {
             _ => panic!("Unknown migration type. migrations supported: standard, passive, reuseCID")
         };
         let fast = args.get_bool("--fast");
+        let no_progress = args.get_bool("--no-progress");
         Args { 
             file_path,
             n_threads,
@@ -70,7 +73,8 @@ impl Parseable for Args {
             migration_type,
             migration_ip,
             primary_ip,
-            fast
+            fast,
+            no_progress,
         }
     }
 }
