@@ -80,7 +80,10 @@ impl QuicheClient{
                     IpAddr::V6(_) => mio::net::UdpSocket::bind(format!("[{}]:0",primary_ip.unwrap().to_string()).parse().unwrap()).unwrap()
                 }
         } else {
-            mio::net::UdpSocket::bind(format!("0.0.0.0:0").parse().unwrap()).unwrap()
+            match target.ip {
+                IpAddr::V4(_) => mio::net::UdpSocket::bind("0.0.0.0:0".parse().unwrap()).unwrap(),
+                IpAddr::V6(_) => mio::net::UdpSocket::bind("[::]:0".parse().unwrap()).unwrap(),
+            }
         };
 
         let peer_addr = SocketAddr::new(target.ip, target.port);
@@ -194,8 +197,8 @@ impl QuicheClient{
         }
 
 
-        self.primary_socket.connect(self.peer_addr).expect("Failed to connect socket");
-        self.migration_socket.connect(self.peer_addr).expect("Failed to connect socket");
+        self.primary_socket.connect(self.peer_addr).expect(&format!("Failed to connect socket {}", self.peer_addr));
+        self.migration_socket.connect(self.peer_addr).expect(&format!("Failed to connect socket {}", self.peer_addr));
 
         let mut scid = [0; quiche::MAX_CONN_ID_LEN];
         let rng = SystemRandom::new();
