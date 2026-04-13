@@ -9,6 +9,7 @@ use std::{fs::File, io::{BufRead, BufReader, Write}, net::IpAddr, thread};
 use args::Parseable;
 use common::Target;
 use crossbeam_channel::bounded;
+use indicatif::{ProgressBar, ProgressStyle};
 
 fn main() {
     env_logger::init();
@@ -17,10 +18,34 @@ fn main() {
     let args = args::Args::with_docopt(&docopt);
 
     let filename = args.file_path;
-    let file = File::open(filename).unwrap();
+    let file = File::open(&filename).unwrap();
     let reader = BufReader::new(file);
 
     let n_threads = args.n_threads;
+    let no_progress = args.no_progress;
+
+    // Count total lines (excluding header) for the progress bar
+    let total_lines: u64 = if !no_progress {
+        let count_file = File::open(&filename).unwrap();
+        let count_reader = BufReader::new(count_file);
+        count_reader.lines().skip(1).count() as u64
+    } else {
+        0
+    };
+
+    let pb: Option<ProgressBar> = if no_progress {
+        None
+    } else {
+        let bar = ProgressBar::new(total_lines);
+        bar.set_style(
+            ProgressStyle::with_template(
+                "{spinner:.green} [{elapsed_precise}] [{wide_bar:.cyan/blue}] {pos}/{len} ({eta})"
+            )
+            .unwrap()
+            .progress_chars("#>-"),
+        );
+        Some(bar)
+    };
 
     let (send_url, recv_url) = bounded(n_threads+2);
     let (send_result, recv_result) = bounded(n_threads+2);
@@ -57,6 +82,9 @@ fn main() {
                 },
                 Err(_) => {
                     out_file.write("\n]".as_bytes()).expect("Failed to write line");
+                    if let Some(ref bar) = pb {
+                        bar.finish_with_message("Done");
+                    }
                     break
                 }
             };
@@ -68,6 +96,9 @@ fn main() {
             };
             out_file.write(res.as_bytes()).expect("Failed to write line");
             debug!("Test result error : {:?}", test_quic_migration.error);
+            if let Some(ref bar) = pb {
+                bar.inc(1);
+            }
             i+=1;
         }
     });
